@@ -1,0 +1,128 @@
+name: Build and sign dcv-ldi-extension-cpp
+
+# C++ port of the .NET dcv-ldi-extension pipeline (see the DCV/ repo):
+#   CMake + vcpkg (static protobuf, static CRT)
+#   -> sign with the same fixed self-signed code-signing certificate
+#   -> upload exe + .cer + manifest as build artifacts
+#
+# Uses the SAME certificate/secrets as the .NET project's workflow
+# (CODE_SIGNING_PFX_BASE64 / CODE_SIGNING_PFX_PASSWORD) so a machine that
+# already trusts codesign/DcvLdiExtension.cer from either repo trusts
+# binaries from both.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "proto/**"
+      - "CMakeLists.txt"
+      - "vcpkg.json"
+      - ".github/workflows/build-and-sign.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "proto/**"
+      - "CMakeLists.txt"
+      - "vcpkg.json"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Disable Windows Defender real-time scanning
+        shell: pwsh
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
+        # Building protobuf from source via vcpkg, then linking/signing a
+        # large static binary, gets significantly slower with Defender's
+        # real-time scan active on every file write.
+
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg --depth 1
+          .\vcpkg\bootstrap-vcpkg.bat
+
+      - name: Configure (CMake + vcpkg manifest mode)
+        shell: pwsh
+        env:
+          VCPKG_DEFAULT_TRIPLET: x64-windows-static
+        run: |
+          cmake -S . -B build -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$PWD\vcpkg\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static
+
+      - name: Build (Release)
+        shell: pwsh
+        run: cmake --build build --config Release --parallel
+
+      - name: Verify binary
+        shell: pwsh
+        run: |
+          $exe = "build\Release\dcv-ldi-extension-cpp.exe"
+          if (-not (Test-Path $exe)) { throw "Missing binary: $exe" }
+          Write-Host "Binary size: $((Get-Item $exe).Length) bytes"
+          New-Item -ItemType Directory -Force -Path output | Out-Null
+          Copy-Item $exe output\
+
+      - name: Import code-signing certificate and sign the binary
+        shell: pwsh
+        env:
+          CODE_SIGNING_PFX_BASE64: ${{ secrets.CODE_SIGNING_PFX_BASE64 }}
+          CODE_SIGNING_PFX_PASSWORD: ${{ secrets.CODE_SIGNING_PFX_PASSWORD }}
+        run: |
+          $exe = "output\dcv-ldi-extension-cpp.exe"
+
+          if (-not $env:CODE_SIGNING_PFX_BASE64 -or -not $env:CODE_SIGNING_PFX_PASSWORD) {
+            throw "Missing CODE_SIGNING_PFX_BASE64 / CODE_SIGNING_PFX_PASSWORD secrets"
+          }
+
+          Write-Host "=== Importing code-signing certificate ==="
+          $pfxPath = Join-Path $env:RUNNER_TEMP "DcvLdiExtension.pfx"
+          $b64 = ($env:CODE_SIGNING_PFX_BASE64 -replace '\s', '')
+          [System.IO.File]::WriteAllBytes($pfxPath, [System.Convert]::FromBase64String($b64))
+          $securePassword = ConvertTo-SecureString -String $env:CODE_SIGNING_PFX_PASSWORD -Force -AsPlainText
+
+          $cert = Import-PfxCertificate `
+            -FilePath $pfxPath `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -Password $securePassword
+          Remove-Item $pfxPath -Force
+
+          # Set-AuthenticodeSignature refuses to sign with a self-signed cert
+          # unless it's also trusted (TrustedPublisher + Root), even though
+          # we hold the private key.
+          foreach ($storeName in @("TrustedPublisher","Root")) {
+            $s = New-Object System.Security.Cryptography.X509Certificates.X509Store($storeName,"CurrentUser")
+            $s.Open("ReadWrite"); $s.Add($cert); $s.Close()
+          }
+
+          $result = Set-AuthenticodeSignature $exe -Certificate $cert
+          Write-Host "Signature: $($result.Status)"
+          if ($result.Status -ne "Valid") { throw "Signing failed" }
+          Write-Host "Certificate thumbprint: $($cert.Thumbprint)"
+
+          Copy-Item "codesign\DcvLdiExtension.cer" "output\DcvLdiExtension.cer"
+          Copy-Item "manifest\dcv_extension_manifest.json" output\
+
+          Write-Host "=== Build complete ==="
+          Get-ChildItem output\
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dcv-ldi-extension-cpp
+          path: |
+            output/dcv-ldi-extension-cpp.exe
+            output/DcvLdiExtension.cer
+            output/dcv_extension_manifest.json
+          if-no-files-found: error

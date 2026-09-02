@@ -1,0 +1,8 @@
+{
+    "name": "amazon-dcv-ldi-extension-cpp",
+    "description": "Amazon WorkSpaces DCV Local Device Info Extension (C++ port)",
+    "path": "dcv-ldi-extension-cpp.exe",
+    "start_on_server": true,
+    "start_on_client": true,
+    "virtual_channel_namespace": "com.amazon.dcv-ldi-extension"
+}

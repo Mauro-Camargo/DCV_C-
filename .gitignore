@@ -1,0 +1,17 @@
+# CMake / build output
+build/
+out/
+
+# vcpkg (cloned fresh by the workflow / setup script; not vendored)
+vcpkg/
+vcpkg_installed/
+
+# Visual Studio
+.vs/
+*.vcxproj.user
+
+# Build artifacts staged for signing
+output/
+
+# macOS
+.DS_Store
