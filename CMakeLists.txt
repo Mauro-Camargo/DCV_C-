@@ -7,9 +7,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(MSVC)
-  # Static CRT, matching the x64-windows-static vcpkg triplet, so the
-  # resulting exe carries no external runtime DLL dependency - the C++
-  # equivalent of the .NET project's self-contained single-file publish.
+  # Static CRT, matching the x64-windows-static-release vcpkg triplet (see
+  # triplets/), so the resulting exe carries no external runtime DLL
+  # dependency - the C++ equivalent of the .NET project's self-contained
+  # single-file publish.
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 

@@ -54,12 +54,11 @@ jobs:
 
       - name: Configure (CMake + vcpkg manifest mode)
         shell: pwsh
-        env:
-          VCPKG_DEFAULT_TRIPLET: x64-windows-static
         run: |
           cmake -S . -B build -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="$PWD\vcpkg\scripts\buildsystems\vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=x64-windows-static
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static-release `
+            -DVCPKG_OVERLAY_TRIPLETS="$PWD\triplets"
 
       - name: Build (Release)
         shell: pwsh
