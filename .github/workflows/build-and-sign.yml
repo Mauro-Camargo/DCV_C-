@@ -51,7 +51,10 @@ jobs:
       - name: Bootstrap vcpkg
         shell: pwsh
         run: |
-          git clone https://github.com/microsoft/vcpkg --depth 1
+          # A blobless partial clone: full commit/tree history (needed to
+          # resolve builtin-baseline and the pinned protobuf override in
+          # vcpkg.json) without downloading every historical file's content.
+          git clone --filter=blob:none https://github.com/microsoft/vcpkg
           .\vcpkg\bootstrap-vcpkg.bat
 
       - name: Cache vcpkg binary packages
