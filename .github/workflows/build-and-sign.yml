@@ -51,10 +51,14 @@ jobs:
       - name: Bootstrap vcpkg
         shell: pwsh
         run: |
-          # A blobless partial clone: full commit/tree history (needed to
-          # resolve builtin-baseline and the pinned protobuf override in
-          # vcpkg.json) without downloading every historical file's content.
-          git clone --filter=blob:none https://github.com/microsoft/vcpkg
+          # A full (non-shallow) clone: builtin-baseline and the pinned
+          # protobuf override in vcpkg.json need historical commits/trees
+          # available locally. A blobless partial clone (--filter=blob:none)
+          # also works and is lighter, but makes vcpkg lazily fetch missing
+          # blobs from GitHub mid-build - one such fetch failed with a
+          # transient DNS error, so a full clone trades a bit of extra
+          # clone time for not depending on that at all.
+          git clone https://github.com/microsoft/vcpkg
           .\vcpkg\bootstrap-vcpkg.bat
 
       - name: Cache vcpkg binary packages
