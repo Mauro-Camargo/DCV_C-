@@ -52,8 +52,21 @@ jobs:
           git clone https://github.com/microsoft/vcpkg --depth 1
           .\vcpkg\bootstrap-vcpkg.bat
 
+      - name: Cache vcpkg binary packages
+        uses: actions/cache@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-binarycache-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'triplets/x64-windows-static-release.cmake') }}
+        # Caches only the built package archives (vcpkg's "files" binary
+        # cache backend), not the raw buildtrees - a full protobuf rebuild
+        # produces a few hundred MB here instead of several GB, and lets a
+        # cache hit skip recompiling entirely instead of just skipping the
+        # download/extract step.
+
       - name: Configure (CMake + vcpkg manifest mode)
         shell: pwsh
+        env:
+          VCPKG_BINARY_SOURCES: "clear;files,${{ github.workspace }}\\vcpkg-cache,readwrite"
         run: |
           cmake -S . -B build -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="$PWD\vcpkg\scripts\buildsystems\vcpkg.cmake" `
