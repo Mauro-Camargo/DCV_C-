@@ -18,6 +18,7 @@ on:
       - "proto/**"
       - "CMakeLists.txt"
       - "vcpkg.json"
+      - "triplets/**"
       - ".github/workflows/build-and-sign.yml"
   pull_request:
     branches: [main]
@@ -26,6 +27,7 @@ on:
       - "proto/**"
       - "CMakeLists.txt"
       - "vcpkg.json"
+      - "triplets/**"
   workflow_dispatch: {}
 
 permissions:
